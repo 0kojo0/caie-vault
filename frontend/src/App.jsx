@@ -85,6 +85,7 @@ function SetupScreen({ onComplete }) {
   const [downloading, setDownloading] = useState(false)
   const [progress, setProgress]     = useState('')
   const [error, setError]           = useState('')
+  const [showAdmin, setShowAdmin]   = useState(false)
 
   useEffect(() => {
     fetch(`${API}/api/catalog`)
@@ -175,7 +176,10 @@ function SetupScreen({ onComplete }) {
     <div style={s.screen}>
       <div style={s.card}>
         <div style={s.header}>
-          <div style={s.logo}>CAIE <span style={{ color: '#e8c547' }}>Vault</span></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <div style={s.logo}>CAIE <span style={{ color: "#e8c547" }}>Vault</span></div>
+            <button onClick={() => setShowAdmin(true)} style={{ background: "#0e1020", color: "#e8c547", border: "1px solid #e8c54733", borderRadius: 7, padding: "6px 12px", fontSize: 12, fontFamily: "Syne, sans-serif", cursor: "pointer", fontWeight: 700 }}>Admin</button>
+          </div>
           <p style={{ color: '#7a7d99', fontSize: 13 }}>
             Search past paper questions — offline, anytime.
           </p>
@@ -265,7 +269,8 @@ function SetupScreen({ onComplete }) {
         </div>
       </div>
 
-      <p style={{ marginTop: 20, fontSize: 12, color: '#2e3350', textAlign: 'center' }}>
+      {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
+      <p style={{ marginTop: 20, fontSize: 12, color: "#2e3350", textAlign: "center" }}>
         CAIE Vault · Questions sourced from official past papers
       </p>
     </div>
@@ -791,8 +796,10 @@ function SearchScreen({ profile, onResetSetup }) {
 // Root App
 // ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [profile, setProfile] = useState(null)   // { level, subjects }
+  const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  const isAdminRoute = new URLSearchParams(window.location.search).get('admin') === 'vault2024sahil'
 
   useEffect(() => {
     getMeta('setup').then(saved => {
@@ -801,9 +808,7 @@ export default function App() {
     }).catch(() => setLoading(false))
   }, [])
 
-  const handleSetupComplete = async (p) => {
-    setProfile(p)
-  }
+  const handleSetupComplete = async (p) => { setProfile(p) }
 
   const handleReset = async () => {
     if (confirm('This will clear your downloaded questions and restart setup. Continue?')) {
@@ -813,11 +818,19 @@ export default function App() {
     }
   }
 
+  if (isAdminRoute) return (
+    <div style={{ minHeight: '100vh', background: '#07080f', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ width: '100%', maxWidth: 700 }}>
+        <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 22, color: '#e8c547', marginBottom: 20 }}>
+          CAIE Vault — Admin
+        </div>
+        <AdminPanel onClose={() => window.location.href = '/'} />
+      </div>
+    </div>
+  )
+
   if (loading) return (
-    <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center',
-      justifyContent: 'center', background: '#07080f'
-    }}>
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07080f' }}>
       <Spinner size={32} />
     </div>
   )

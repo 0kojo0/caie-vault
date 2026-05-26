@@ -4,5 +4,4 @@ __pycache__/
 uploads/
 .env
 node_modules/
-dist/
 .DS_Store
