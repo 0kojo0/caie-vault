@@ -344,28 +344,41 @@ class ChatRequest(BaseModel):
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
     try:
-        import anthropic as ant
-        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        import httpx
+        api_key = os.environ.get("GEMINI_API_KEY", "")
         if not api_key:
-            raise HTTPException(400, "AI not configured. Add ANTHROPIC_API_KEY to environment variables.")
+            raise HTTPException(400, "AI not configured. Add GEMINI_API_KEY to environment variables.")
         
         subjects = ", ".join(req.subjects) if req.subjects else "various subjects"
         level = req.level or "A Level"
         
-        system = f"""You are a CAIE exam study assistant helping a student studying {level}: {subjects}.
+        system_instruction = f"""You are a CAIE exam study assistant helping a student studying {level}: {subjects}.
 Answer questions clearly and concisely. Use examples where helpful.
 For calculations, show step-by-step working.
 Keep answers focused on CAIE syllabus requirements.
 Format responses clearly with bullet points or numbered steps where appropriate."""
 
-        client = ant.Anthropic(api_key=api_key)
-        msg = client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=1000,
-            system=system,
-            messages=[{"role": m.role, "content": m.content} for m in req.messages]
-        )
-        return {"reply": msg.content[0].text}
+        # Build conversation history for Gemini
+        gemini_messages = []
+        for m in req.messages:
+            role = "user" if m.role == "user" else "model"
+            gemini_messages.append({"role": role, "parts": [{"text": m.content}]})
+
+        payload = {
+            "system_instruction": {"parts": [{"text": system_instruction}]},
+            "contents": gemini_messages,
+            "generationConfig": {"maxOutputTokens": 1000, "temperature": 0.7}
+        }
+
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}",
+                json=payload
+            )
+            data = response.json()
+        
+        reply = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Sorry, I could not get a response.")
+        return {"reply": reply}
     except HTTPException:
         raise
     except Exception as e:
