@@ -415,13 +415,15 @@ function DetailPanel({ result, onClose }) {
 // Admin Panel
 // ─────────────────────────────────────────────────────────────────────────────
 function AdminPanel({ onClose }) {
-  const [password, setPassword]   = useState('')
+  const [password, setPassword]   = useState('caievault2024')
   const [authed, setAuthed]       = useState(false)
   const [papers, setPapers]       = useState([])
   const [uploadLog, setUploadLog] = useState([])
   const [loading, setLoading]     = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileRef = useRef()
+
+  useEffect(() => { login() }, [])
 
   const login = async () => {
     try {
