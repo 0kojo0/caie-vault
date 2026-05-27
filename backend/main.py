@@ -331,6 +331,46 @@ def search(req: SearchRequest, db: sqlite3.Connection = Depends(get_db)):
     results.sort(key=lambda x: -x["score"])
     return {"results": results[:30]}
 
+# ── AI Chat endpoint ─────────────────────────────────────────────────────────
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+    subjects: Optional[list[str]] = None
+    level: Optional[str] = None
+
+@app.post("/api/chat")
+async def chat(req: ChatRequest):
+    try:
+        import anthropic as ant
+        api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        if not api_key:
+            raise HTTPException(400, "AI not configured. Add ANTHROPIC_API_KEY to environment variables.")
+        
+        subjects = ", ".join(req.subjects) if req.subjects else "various subjects"
+        level = req.level or "A Level"
+        
+        system = f"""You are a CAIE exam study assistant helping a student studying {level}: {subjects}.
+Answer questions clearly and concisely. Use examples where helpful.
+For calculations, show step-by-step working.
+Keep answers focused on CAIE syllabus requirements.
+Format responses clearly with bullet points or numbered steps where appropriate."""
+
+        client = ant.Anthropic(api_key=api_key)
+        msg = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1000,
+            system=system,
+            messages=[{"role": m.role, "content": m.content} for m in req.messages]
+        )
+        return {"reply": msg.content[0].text}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
 # ── Admin routes ──────────────────────────────────────────────────────────────
 
 @app.post("/api/admin/upload")

@@ -634,6 +634,133 @@ function InstallBanner({ onDismiss }) {
   )
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI Chat Screen
+// ─────────────────────────────────────────────────────────────────────────────
+function AIChatScreen({ profile }) {
+  const [messages, setMessages] = useState([
+    { role: 'assistant', text: `Hi! I'm your CAIE study assistant. Ask me anything about ${profile.subjects.join(', ')} — definitions, explanations, worked examples, anything!` }
+  ])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const bottomRef = useRef()
+
+  const scrollDown = () => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+
+  useEffect(() => { scrollDown() }, [messages])
+
+  const send = async () => {
+    const text = input.trim()
+    if (!text || loading) return
+    setInput('')
+    const newMessages = [...messages, { role: 'user', text }]
+    setMessages(newMessages)
+    setLoading(true)
+
+    try {
+      const res = await fetch(`${API}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: newMessages
+            .filter((m, i) => !(m.role === 'assistant' && i === 0))
+            .map(m => ({ role: m.role, content: m.text })),
+          subjects: profile.subjects,
+          level: profile.level
+        })
+      })
+      const data = await res.json()
+      const reply = data.reply || 'Sorry, I could not get a response. Please try again.'
+      setMessages(prev => [...prev, { role: 'assistant', text: reply }])
+    } catch (e) {
+      setMessages(prev => [...prev, { role: 'assistant', text: 'Error: Could not connect. Check your internet connection.' }])
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#07080f' }}>
+      {/* Messages */}
+      <div style={{ flex: 1, overflow: 'auto', padding: '16px 16px 0' }}>
+        {messages.map((msg, i) => (
+          <div key={i} style={{
+            display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+            marginBottom: 12, animation: 'fadeUp 0.2s ease'
+          }}>
+            {msg.role === 'assistant' && (
+              <div style={{
+                width: 28, height: 28, borderRadius: '50%', background: '#e8c547',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 14, marginRight: 8, flexShrink: 0, marginTop: 4
+              }}>✦</div>
+            )}
+            <div style={{
+              maxWidth: '80%', padding: '10px 14px', borderRadius: 12,
+              background: msg.role === 'user' ? '#e8c547' : '#161929',
+              color: msg.role === 'user' ? '#07080f' : '#e0e0f0',
+              fontSize: 14, lineHeight: 1.6,
+              borderBottomRightRadius: msg.role === 'user' ? 4 : 12,
+              borderBottomLeftRadius: msg.role === 'assistant' ? 4 : 12,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word'
+            }}>
+              {msg.text}
+            </div>
+          </div>
+        ))}
+        {loading && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%', background: '#e8c547',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14
+            }}>✦</div>
+            <div style={{ background: '#161929', borderRadius: 12, borderBottomLeftRadius: 4, padding: '10px 14px' }}>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {[0,1,2].map(i => (
+                  <div key={i} style={{
+                    width: 6, height: 6, borderRadius: '50%', background: '#7a7d99',
+                    animation: `pulse 1.2s ease ${i * 0.2}s infinite`
+                  }} />
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid #1e2235', background: '#0e1020' }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <input
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && !e.shiftKey && send()}
+            placeholder="Ask anything — definitions, examples, calculations..."
+            style={{
+              flex: 1, padding: '11px 14px', borderRadius: 10,
+              background: '#161929', color: '#f0f0f8',
+              border: '1px solid #1e2235', fontSize: 14,
+            }}
+            onFocus={e => e.target.style.borderColor = '#e8c547'}
+            onBlur={e => e.target.style.borderColor = '#1e2235'}
+          />
+          <button onClick={send} disabled={loading || !input.trim()} style={{
+            padding: '11px 16px', borderRadius: 10, border: 'none',
+            background: loading || !input.trim() ? '#1e2235' : '#e8c547',
+            color: loading || !input.trim() ? '#7a7d99' : '#07080f',
+            cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+            fontSize: 18, fontWeight: 700, transition: 'all 0.15s'
+          }}>↑</button>
+        </div>
+        <p style={{ fontSize: 11, color: '#2e3350', marginTop: 6, textAlign: 'center' }}>
+          Requires internet · Powered by Claude AI
+        </p>
+      </div>
+    </div>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN 2 — Main Search
 // ─────────────────────────────────────────────────────────────────────────────
@@ -648,6 +775,7 @@ function SearchScreen({ profile, onResetSetup }) {
   const [showInstall, setShowInstall] = useState(false)
   const [deferredPrompt, setDeferred] = useState(null)
   const [showDetail, setShowDetail] = useState(false)
+  const [activeTab, setActiveTab]   = useState('search') // 'search' or 'ai'
   const inputRef = useRef()
 
   // Load questions from IndexedDB on mount
@@ -738,6 +866,32 @@ function SearchScreen({ profile, onResetSetup }) {
         </div>
       </header>
 
+      {/* Tab bar */}
+      <div style={{
+        display: 'flex', borderBottom: '1px solid #1e2235',
+        background: '#07080f', padding: '0 18px'
+      }}>
+        {[{ id: 'search', label: '🔍 Search', }, { id: 'ai', label: '✦ Ask AI' }].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            padding: '12px 16px', background: 'transparent', border: 'none',
+            borderBottom: activeTab === tab.id ? '2px solid #e8c547' : '2px solid transparent',
+            color: activeTab === tab.id ? '#e8c547' : '#7a7d99',
+            fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 13,
+            cursor: 'pointer', transition: 'all 0.15s', marginBottom: -1
+          }}>{tab.label}</button>
+        ))}
+      </div>
+
+      {/* AI Chat Tab */}
+      {activeTab === 'ai' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <AIChatScreen profile={profile} />
+        </div>
+      )}
+
+      {/* Search Tab */}
+      {activeTab === 'search' && <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+
       {/* Search bar */}
       <div style={{
         padding: '16px 18px',
@@ -819,6 +973,8 @@ function SearchScreen({ profile, onResetSetup }) {
           <DetailPanel result={selected} onClose={() => { setShowDetail(false); setSelected(null) }} />
         </div>
       )}
+
+      </div>} {/* end search tab */}
 
       {/* Admin */}
       {showAdmin && <AdminPanel onClose={() => setShowAdmin(false)} />}
