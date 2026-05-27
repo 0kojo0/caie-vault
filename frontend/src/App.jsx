@@ -319,6 +319,39 @@ function SetupScreen({ onComplete }) {
   )
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Generate PapaCambridge links from filename
+// ─────────────────────────────────────────────────────────────────────────────
+function getPaperLinks(filename) {
+  if (!filename) return { qp: null, ms: null }
+  // e.g. 9702_s23_qp_12.pdf
+  const base = filename.replace('.pdf', '').replace('.PDF', '')
+  const parts = base.split('_')
+  if (parts.length < 4) return { qp: null, ms: null }
+  
+  const code    = parts[0]  // 9702
+  const session = parts[1]  // s23
+  const type    = parts[2]  // qp
+  const paper   = parts[3]  // 12
+  
+  const msFilename = `${code}_${session}_ms_${paper}.pdf`
+  const qpFilename = filename
+  
+  // PapaCambridge URL pattern
+  const base_url = `https://pastpapers.papacambridge.com/directories/CAIE/CAIE-IGCSE`
+  
+  // Try to build a reasonable search URL
+  const searchBase = `https://pastpapers.papacambridge.com`
+  
+  return {
+    qp: `${searchBase}/?dir=CAIE/CAIE-A-LEVEL/${code}&file=${qpFilename}`,
+    ms: `${searchBase}/?dir=CAIE/CAIE-A-LEVEL/${code}&file=${msFilename}`,
+    qpName: qpFilename,
+    msName: msFilename,
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Result card
 // ─────────────────────────────────────────────────────────────────────────────
@@ -387,9 +420,28 @@ function DetailPanel({ result, onClose }) {
             <div style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 20, color: '#f0f0f8', marginBottom: 4 }}>
               Question {result.q_num}
             </div>
-            <div style={{ fontSize: 12, color: '#7a7d99' }}>
+            <div style={{ fontSize: 12, color: '#7a7d99', marginBottom: 8 }}>
               {result.session} {result.year} · Paper {result.paper_num} · {result.filename}
             </div>
+            {(() => {
+              const links = getPaperLinks(result.filename)
+              return links.qp ? (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <a href={links.qp} target="_blank" rel="noopener noreferrer" style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                    background: '#4f8ef722', color: '#4f8ef7', border: '1px solid #4f8ef744',
+                    textDecoration: 'none', fontFamily: 'Syne, sans-serif'
+                  }}>📄 Question Paper</a>
+                  <a href={links.ms} target="_blank" rel="noopener noreferrer" style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
+                    background: '#4ade8022', color: '#4ade80', border: '1px solid #4ade8044',
+                    textDecoration: 'none', fontFamily: 'Syne, sans-serif'
+                  }}>✅ Mark Scheme</a>
+                </div>
+              ) : null
+            })()}
           </div>
           <button onClick={onClose} style={{
             background: '#161929', color: '#7a7d99',
