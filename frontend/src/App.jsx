@@ -72,7 +72,7 @@ const SUBJECT_COLOR = {
 }
 const subjectColor = s => SUBJECT_COLOR[s] || '#e8c547'
 
-const LEVEL_COLOR = { 'A Level': '#e8c547', 'O Level': '#4ade80', 'IGCSE': '#4f8ef7' }
+const LEVEL_COLOR = { 'A Level': '#e8c547', 'AS Level': '#f97316', 'A2 Level': '#e8c547', 'O Level': '#4ade80', 'IGCSE': '#4f8ef7' }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCREEN 1 — Welcome / Setup

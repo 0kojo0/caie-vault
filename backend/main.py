@@ -100,6 +100,11 @@ SUBJECT_MAP = {
 }
 SESSION_MAP = {"s": "Summer", "w": "Winter", "m": "March"}
 
+# AS Level papers: paper numbers 1,2,3 (and variants like 11,12,13,21,22,23,31,32,33)
+# A2 Level papers: paper numbers 4,5 (and variants like 41,42,43,51,52,53)
+AS_PAPERS = {"1","2","3","11","12","13","21","22","23","31","32","33"}
+A2_PAPERS = {"4","5","41","42","43","51","52","53"}
+
 def parse_filename(filename):
     name  = filename.lower().replace(".pdf", "")
     parts = name.split("_")
@@ -121,6 +126,12 @@ def parse_filename(filename):
 
     if len(parts) >= 4:
         paper_num = parts[3]
+        # For A Level papers, refine into AS or A2
+        if level == "A Level":
+            if paper_num in AS_PAPERS:
+                level = "AS Level"
+            elif paper_num in A2_PAPERS:
+                level = "A2 Level"
 
     return subject, level, year, session, paper_num
 
