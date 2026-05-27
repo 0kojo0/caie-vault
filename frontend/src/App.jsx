@@ -193,10 +193,7 @@ function SetupScreen({ onComplete }) {
     <div style={s.screen}>
       <div style={s.card}>
         <div style={s.header}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-            <div style={s.logo}>CAIE <span style={{ color: "#e8c547" }}>Vault</span></div>
-            <button onClick={() => setShowAdmin(true)} style={{ background: "#0e1020", color: "#e8c547", border: "1px solid #e8c54733", borderRadius: 7, padding: "6px 12px", fontSize: 12, fontFamily: "Syne, sans-serif", cursor: "pointer", fontWeight: 700 }}>Admin</button>
-          </div>
+          <div style={s.logo}>CAIE <span style={{ color: "#e8c547" }}>Vault</span></div>
           <p style={{ color: '#7a7d99', fontSize: 13 }}>
             Search past paper questions — offline, anytime.
           </p>
