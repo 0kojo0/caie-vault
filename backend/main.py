@@ -46,11 +46,17 @@ def init_db():
             year         TEXT,
             session      TEXT,
             paper_num    TEXT,
+            component    TEXT,
             full_text    TEXT,
             questions    TEXT,
             uploaded_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    # Add component column if upgrading from older DB
+    try:
+        c.execute("ALTER TABLE papers ADD COLUMN component TEXT")
+    except Exception:
+        pass
     conn.commit()
     conn.close()
 
@@ -100,6 +106,17 @@ SUBJECT_MAP = {
 }
 SESSION_MAP = {"s": "Summer", "w": "Winter", "m": "March"}
 
+# Maths (9709) paper component mapping by first digit of paper number
+MATHS_COMPONENTS = {
+    "1": "Pure 1 (P1)",
+    "2": "Pure 2 (P2)",
+    "3": "Pure 3 (P3)",
+    "4": "Mechanics 1 (M1)",
+    "5": "Mechanics 2 (M2)",
+    "6": "Statistics 1 (S1)",
+    "7": "Statistics 2 (S2)",
+}
+
 # AS Level papers: paper numbers 1,2,3 (and variants like 11,12,13,21,22,23,31,32,33)
 # A2 Level papers: paper numbers 4,5 (and variants like 41,42,43,51,52,53)
 AS_PAPERS = {"1","2","3","11","12","13","21","22","23","31","32","33"}
@@ -124,6 +141,7 @@ def parse_filename(filename):
         session   = SESSION_MAP.get(sess_code, sess_code.upper())
         year      = "20" + year_code if len(year_code) == 2 else year_code
 
+    component = None
     if len(parts) >= 4:
         paper_num = parts[3]
         # For A Level papers, refine into AS or A2
@@ -132,8 +150,12 @@ def parse_filename(filename):
                 level = "AS Level"
             elif paper_num in A2_PAPERS:
                 level = "A2 Level"
+        # For Maths, detect component from first digit of paper number
+        if parts[0] == "9709" and paper_num:
+            first_digit = paper_num[0]
+            component = MATHS_COMPONENTS.get(first_digit)
 
-    return subject, level, year, session, paper_num
+    return subject, level, year, session, paper_num, component
 
 def extract_text(filepath):
     try:
@@ -178,22 +200,57 @@ def catalog(db: sqlite3.Connection = Depends(get_db)):
     rows = db.execute(
         "SELECT DISTINCT subject, level FROM papers ORDER BY level, subject"
     ).fetchall()
-    return {"catalog": [dict(r) for r in rows]}
+    # Get maths components if available
+    maths_components = db.execute(
+        "SELECT DISTINCT component FROM papers WHERE subject='Mathematics' AND component IS NOT NULL ORDER BY component"
+    ).fetchall()
+    return {
+        "catalog": [dict(r) for r in rows],
+        "maths_components": [r["component"] for r in maths_components]
+    }
 
 # Public: download questions for selected subjects (for offline cache)
 @app.get("/api/download")
 def download_questions(
     subjects: str,   # comma-separated e.g. "Physics,Chemistry"
     level: str,
+    components: Optional[str] = None,  # comma-separated maths components e.g. "Pure 1 (P1),Statistics 1 (S1)"
     db: sqlite3.Connection = Depends(get_db)
 ):
     subject_list = [s.strip() for s in subjects.split(",") if s.strip()]
     placeholders = ",".join("?" * len(subject_list))
-    rows = db.execute(
-        f"SELECT filename, subject, level, year, session, paper_num, questions "
-        f"FROM papers WHERE level=? AND subject IN ({placeholders})",
-        [level] + subject_list
-    ).fetchall()
+    
+    # Build query - for maths with components, filter by component too
+    component_list = [c.strip() for c in components.split(",") if c.strip()] if components else []
+    
+    if component_list and "Mathematics" in subject_list:
+        # Get non-maths subjects normally + maths with component filter
+        non_maths = [s for s in subject_list if s != "Mathematics"]
+        rows = []
+        
+        if non_maths:
+            ph = ",".join("?" * len(non_maths))
+            r = db.execute(
+                f"SELECT filename, subject, level, year, session, paper_num, component, questions "
+                f"FROM papers WHERE level=? AND subject IN ({ph})",
+                [level] + non_maths
+            ).fetchall()
+            rows.extend(r)
+        
+        # Maths with component filter
+        comp_ph = ",".join("?" * len(component_list))
+        r = db.execute(
+            f"SELECT filename, subject, level, year, session, paper_num, component, questions "
+            f"FROM papers WHERE subject='Mathematics' AND component IN ({comp_ph})",
+            component_list
+        ).fetchall()
+        rows.extend(r)
+    else:
+        rows = db.execute(
+            f"SELECT filename, subject, level, year, session, paper_num, component, questions "
+            f"FROM papers WHERE level=? AND subject IN ({placeholders})",
+            [level] + subject_list
+        ).fetchall()
 
     all_questions = []
     for row in rows:
@@ -209,6 +266,7 @@ def download_questions(
                     "year":      row["year"],
                     "session":   row["session"],
                     "paper_num": row["paper_num"],
+                    "component": row["component"] if "component" in row.keys() else None,
                     "q_num":     q.get("num", "?"),
                     "text":      q.get("text", ""),
                 })
@@ -295,14 +353,14 @@ async def upload_pdf(
     with open(filepath, "wb") as f:
         f.write(content)
 
-    subject, level, year, session, paper_num = parse_filename(file.filename)
+    subject, level, year, session, paper_num, component = parse_filename(file.filename)
     full_text = extract_text(filepath)
     questions = extract_questions(full_text)
 
     db.execute("""
-        INSERT INTO papers (filename, subject, level, year, session, paper_num, full_text, questions)
-        VALUES (?,?,?,?,?,?,?,?)
-    """, (file.filename, subject, level, year, session, paper_num,
+        INSERT INTO papers (filename, subject, level, year, session, paper_num, component, full_text, questions)
+        VALUES (?,?,?,?,?,?,?,?,?)
+    """, (file.filename, subject, level, year, session, paper_num, component,
           full_text, json.dumps(questions)))
     db.commit()
 
@@ -314,6 +372,7 @@ async def upload_pdf(
         "year":            year,
         "session":         session,
         "paper_num":       paper_num,
+        "component":       component,
         "questions_found": len(questions),
     }
 

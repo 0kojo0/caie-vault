@@ -78,19 +78,24 @@ const LEVEL_COLOR = { 'A Level': '#e8c547', 'AS Level': '#f97316', 'A2 Level': '
 // SCREEN 1 — Welcome / Setup
 // ─────────────────────────────────────────────────────────────────────────────
 function SetupScreen({ onComplete }) {
-  const [catalog, setCatalog]       = useState([])
-  const [selectedLevel, setLevel]   = useState(null)
-  const [selectedSubs, setSubs]     = useState([])
-  const [step, setStep]             = useState(1) // 1=level, 2=subjects, 3=downloading
-  const [downloading, setDownloading] = useState(false)
-  const [progress, setProgress]     = useState('')
-  const [error, setError]           = useState('')
-  const [showAdmin, setShowAdmin]   = useState(false)
+  const [catalog, setCatalog]           = useState([])
+  const [mathsComponents, setMathsComps] = useState([])
+  const [selectedLevel, setLevel]       = useState(null)
+  const [selectedSubs, setSubs]         = useState([])
+  const [selectedComps, setComps]       = useState([]) // maths components
+  const [step, setStep]                 = useState(1) // 1=level, 2=subjects, 3=maths components, 4=downloading
+  const [downloading, setDownloading]   = useState(false)
+  const [progress, setProgress]         = useState('')
+  const [error, setError]               = useState('')
+  const [showAdmin, setShowAdmin]       = useState(false)
 
   useEffect(() => {
     fetch(`${API}/api/catalog`)
       .then(r => r.json())
-      .then(d => setCatalog(d.catalog || []))
+      .then(d => {
+        setCatalog(d.catalog || [])
+        setMathsComps(d.maths_components || [])
+      })
       .catch(() => setError('Cannot reach server. Check your internet connection.'))
   }, [])
 
@@ -101,29 +106,41 @@ function SetupScreen({ onComplete }) {
     prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]
   )
 
-  const download = async () => {
-    if (!selectedSubs.length) return
-    setStep(3)
+  const hasMaths = selectedSubs.includes('Mathematics')
+
+  const goToStep3OrDownload = () => {
+    if (hasMaths && mathsComponents.length > 0) {
+      setStep(3)
+    } else {
+      startDownload([])
+    }
+  }
+
+  const startDownload = async (comps) => {
+    setStep(4)
     setDownloading(true)
     setError('')
     try {
       setProgress('Connecting to server...')
-      const url = `${API}/api/download?level=${encodeURIComponent(selectedLevel)}&subjects=${encodeURIComponent(selectedSubs.join(','))}`
+      let url = `${API}/api/download?level=${encodeURIComponent(selectedLevel)}&subjects=${encodeURIComponent(selectedSubs.join(','))}`
+      if (comps.length > 0) url += `&components=${encodeURIComponent(comps.join(','))}`
       const res = await fetch(url)
       if (!res.ok) throw new Error('Server error')
       const data = await res.json()
       setProgress(`Saving ${data.count} questions to your device...`)
       await clearQuestions()
       await saveQuestions(data.questions)
-      await saveMeta('setup', { level: selectedLevel, subjects: selectedSubs, downloadedAt: Date.now() })
+      await saveMeta('setup', { level: selectedLevel, subjects: selectedSubs, components: comps, downloadedAt: Date.now() })
       setProgress(`Done! ${data.count} questions saved.`)
-      setTimeout(() => onComplete({ level: selectedLevel, subjects: selectedSubs }), 800)
+      setTimeout(() => onComplete({ level: selectedLevel, subjects: selectedSubs, components: comps }), 800)
     } catch (e) {
       setError('Download failed: ' + e.message)
       setDownloading(false)
-      setStep(2)
+      setStep(hasMaths && mathsComponents.length > 0 ? 3 : 2)
     }
   }
+
+  const download = goToStep3OrDownload
 
   const s = {
     screen: {
@@ -257,6 +274,34 @@ function SetupScreen({ onComplete }) {
           )}
 
           {step === 3 && (
+            <>
+              <div style={s.stepLabel}>Step 3 of 3</div>
+              <div style={s.title}>Which Maths papers?</div>
+              <p style={{ fontSize: 13, color: '#7a7d99', marginBottom: 16, marginTop: -12 }}>
+                Pick the components you study. Others will download all Maths papers.
+              </p>
+              <div style={s.grid}>
+                {mathsComponents.map(comp => (
+                  <div
+                    key={comp}
+                    style={s.chip(selectedComps.includes(comp), '#a855f7')}
+                    onClick={() => setComps(prev => prev.includes(comp) ? prev.filter(x => x !== comp) : [...prev, comp])}
+                  >
+                    {comp}
+                  </div>
+                ))}
+              </div>
+              {error && <p style={{ color: '#f87171', fontSize: 13, marginBottom: 12 }}>{error}</p>}
+              <div style={{ display: 'flex', gap: 10 }}>
+                <Btn onClick={() => setStep(2)} color='#1e2235' textColor='#a0a0c0' style={{ flex: 1 }} small>← Back</Btn>
+                <Btn onClick={() => startDownload(selectedComps)} style={{ flex: 2 }}>
+                  Download {selectedComps.length > 0 ? `(${selectedComps.length} component${selectedComps.length > 1 ? 's' : ''})` : '(all Maths)'}
+                </Btn>
+              </div>
+            </>
+          )}
+
+          {step === 4 && (
             <div style={{ textAlign: 'center', padding: '20px 0' }}>
               <Spinner size={36} />
               <p style={{ marginTop: 20, color: '#a0a0c0', fontSize: 14 }}>{progress}</p>
