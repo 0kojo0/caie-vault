@@ -423,25 +423,26 @@ function DetailPanel({ result, onClose }) {
             <div style={{ fontSize: 12, color: '#7a7d99', marginBottom: 8 }}>
               {result.session} {result.year} · Paper {result.paper_num} · {result.filename}
             </div>
-            {(() => {
-              const links = getPaperLinks(result.filename)
-              return links.qp ? (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <a href={links.qp} target="_blank" rel="noopener noreferrer" style={{
+            {(result.paper_url || result.ms_url) && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {result.paper_url && (
+                  <a href={result.paper_url} target="_blank" rel="noopener noreferrer" style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                     background: '#4f8ef722', color: '#4f8ef7', border: '1px solid #4f8ef744',
                     textDecoration: 'none', fontFamily: 'Syne, sans-serif'
                   }}>📄 Question Paper</a>
-                  <a href={links.ms} target="_blank" rel="noopener noreferrer" style={{
+                )}
+                {result.ms_url && (
+                  <a href={result.ms_url} target="_blank" rel="noopener noreferrer" style={{
                     display: 'inline-flex', alignItems: 'center', gap: 4,
                     padding: '4px 10px', borderRadius: 6, fontSize: 11, fontWeight: 600,
                     background: '#4ade8022', color: '#4ade80', border: '1px solid #4ade8044',
                     textDecoration: 'none', fontFamily: 'Syne, sans-serif'
                   }}>✅ Mark Scheme</a>
-                </div>
-              ) : null
-            })()}
+                )}
+              </div>
+            )}
           </div>
           <button onClick={onClose} style={{
             background: '#161929', color: '#7a7d99',

@@ -19,11 +19,20 @@ import fitz  # PyMuPDF
 from rapidfuzz import fuzz
 
 # ── Config ────────────────────────────────────────────────────────────────────
-DB_PATH      = os.environ.get("DB_PATH", "papers.db")
-UPLOAD_DIR   = os.environ.get("UPLOAD_DIR", "uploads")
+DB_PATH        = os.environ.get("DB_PATH", "papers.db")
+UPLOAD_DIR     = os.environ.get("UPLOAD_DIR", "uploads")
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "caievault2024")
+SUPABASE_URL   = os.environ.get("SUPABASE_URL", "")
+SUPABASE_KEY   = os.environ.get("SUPABASE_KEY", "")
+BUCKET_NAME    = "papers"
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+def get_supabase():
+    if SUPABASE_URL and SUPABASE_KEY:
+        from supabase import create_client
+        return create_client(SUPABASE_URL, SUPABASE_KEY)
+    return None
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
 def get_db():
@@ -55,6 +64,10 @@ def init_db():
     # Add component column if upgrading from older DB
     try:
         c.execute("ALTER TABLE papers ADD COLUMN component TEXT")
+    except Exception:
+        pass
+    try:
+        c.execute("ALTER TABLE papers ADD COLUMN paper_url TEXT")
     except Exception:
         pass
     conn.commit()
@@ -259,8 +272,13 @@ def download_questions(
         try:
             qs = json.loads(row["questions"])
             for q in qs:
+                # Build Supabase URLs
+                fname = row["filename"]
+                ms_fname = fname.replace("_qp_", "_ms_").replace("_QP_", "_ms_")
+                paper_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{fname}" if SUPABASE_URL else None
+                ms_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{ms_fname}" if SUPABASE_URL else None
                 all_questions.append({
-                    "filename":  row["filename"],
+                    "filename":  fname,
                     "subject":   row["subject"],
                     "level":     row["level"],
                     "year":      row["year"],
@@ -269,6 +287,8 @@ def download_questions(
                     "component": row["component"] if "component" in row.keys() else None,
                     "q_num":     q.get("num", "?"),
                     "text":      q.get("text", ""),
+                    "paper_url": paper_url,
+                    "ms_url":    ms_url,
                 })
         except Exception:
             pass
@@ -402,13 +422,30 @@ async def upload_pdf(
         return {"status": "skipped", "message": f"{file.filename} already indexed"}
 
     filepath = os.path.join(UPLOAD_DIR, file.filename)
-    content  = await file.read()
+    file_bytes = await file.read()
     with open(filepath, "wb") as f:
-        f.write(content)
+        f.write(file_bytes)
+
+    # Upload to Supabase Storage for permanent hosting
+    supabase_client = get_supabase()
+    public_url = None
+    if supabase_client:
+        try:
+            supabase_client.storage.from_(BUCKET_NAME).upload(
+                file.filename, file_bytes,
+                {"content-type": "application/pdf", "upsert": "true"}
+            )
+            public_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{file.filename}"
+        except Exception as e:
+            print(f"Supabase upload warning: {e}")
 
     subject, level, year, session, paper_num, component = parse_filename(file.filename)
     full_text = extract_text(filepath)
     questions = extract_questions(full_text)
+
+    # Build mark scheme filename and URL
+    ms_filename = file.filename.replace("_qp_", "_ms_").replace("_QP_", "_ms_")
+    ms_url = f"{SUPABASE_URL}/storage/v1/object/public/{BUCKET_NAME}/{ms_filename}" if SUPABASE_URL else None
 
     db.execute("""
         INSERT INTO papers (filename, subject, level, year, session, paper_num, component, full_text, questions)
@@ -427,6 +464,8 @@ async def upload_pdf(
         "paper_num":       paper_num,
         "component":       component,
         "questions_found": len(questions),
+        "paper_url":       public_url,
+        "ms_url":          ms_url,
     }
 
 @app.get("/api/admin/papers")
