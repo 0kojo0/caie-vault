@@ -397,7 +397,12 @@ Format responses clearly with bullet points or numbered steps where appropriate.
             )
             data = response.json()
         
-        reply = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Sorry, I could not get a response.")
+        print(f"Gemini response: {data}")  # debug
+        candidates = data.get("candidates", [])
+        if not candidates:
+            error_msg = data.get("error", {}).get("message", "No response from AI")
+            return {"reply": f"AI Error: {error_msg}"}
+        reply = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "Sorry, no text in response.")
         return {"reply": reply}
     except HTTPException:
         raise
