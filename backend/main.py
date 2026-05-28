@@ -391,10 +391,14 @@ Format responses clearly with bullet points or numbered steps where appropriate.
         }
 
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(
-                f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}",
-                json=payload
-            )
+            # Support both AIza (old) and AQ. (new) key formats
+            if api_key.startswith('AQ.'):
+                headers = {'Authorization': f'Bearer {api_key}', 'Content-Type': 'application/json'}
+                url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent'
+            else:
+                headers = {'Content-Type': 'application/json'}
+                url = f'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}'
+            response = await client.post(url, json=payload, headers=headers)
             data = response.json()
         
         print(f"Gemini response: {data}")  # debug
